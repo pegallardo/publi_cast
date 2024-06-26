@@ -1,4 +1,4 @@
-from .pipe import Pipe
+from .repository import Pipe
 
 class AudacityAPI:
     def __init__(self):
