@@ -1,7 +1,7 @@
 import subprocess
 import time
-from audacity.named_pipe import NamedPipe
-from audacity.audacity_api import AudacityAPI
+from audacity.repository import NamedPipe
+from audacity.service import AudacityAPI
 
 AUDACITY_PATH = "C:\\Program Files (x86)\\Audacity\\audacity.exe"
 PIPE_TO_AUDACITY = "\\\\.\\pipe\\ToSrvPipe"
