@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
-from publi_cast.audacity.service import AudacityAPI
-from publi_cast.audacity.repository import Pipe
+from publi_cast.services.audacity_service import AudacityAPI
+from publi_cast.repositories.audacity_repository import Pipe
 
 class TestAudacityAPI(unittest.TestCase):
     def setUp(self):
