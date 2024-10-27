@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+import time
 
 class Pipe(ABC):
     @abstractmethod
@@ -11,17 +12,31 @@ class Pipe(ABC):
         pass
 
 class NamedPipe(Pipe):
-    def __init__(self, to_pipe_path: str, from_pipe_path: str):
+    def __init__(self, to_pipe_path: str, from_pipe_path: str, retry_attempts=5, retry_delay=1):
         self.to_pipe_path = to_pipe_path
         self.from_pipe_path = from_pipe_path
+        self.retry_attempts = retry_attempts
+        self.retry_delay = retry_delay
         self.to_pipe = None
         self.from_pipe = None
 
     def open(self):
-        if not os.path.exists(self.to_pipe_path):
-            raise FileNotFoundError("Could not find the Audacity pipe. Is Audacity running with mod-script-pipe enabled?")
-        self.to_pipe = open(self.to_pipe_path, 'w')
-        self.from_pipe = open(self.from_pipe_path, 'r')
+        """Attempt to open named pipes with retries."""
+        attempts = 0
+        while attempts < self.retry_attempts:
+            try:
+                # Try to open the named pipes
+                self.to_pipe = open(self.to_pipe_path, 'w')
+                self.from_pipe = open(self.from_pipe_path, 'r')
+                print("Named pipes successfully opened.")
+                return  # Exit if pipes are successfully opened
+
+            except FileNotFoundError:
+                print(f"Attempt {attempts + 1}/{self.retry_attempts}: Named pipes not available.")
+                time.sleep(self.retry_delay)
+                attempts += 1
+
+        raise RuntimeError("Failed to open named pipes after multiple attempts.")
 
     def close(self):
         if self.to_pipe:

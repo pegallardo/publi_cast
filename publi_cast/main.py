@@ -1,9 +1,10 @@
 import subprocess
 import time
-from publi_cast.repositories.audacity_repository import NamedPipe
-from publi_cast.services.audacity_service import AudacityAPI
+import os
+from repositories.audacity_repository import NamedPipe
+from services.audacity_service import AudacityAPI
 
-AUDACITY_PATH = "C:\\Program Files (x86)\\Audacity\\audacity.exe"
+AUDACITY_PATH = "C:\\Program Files\\Audacity\\audacity.exe"
 PIPE_TO_AUDACITY = "\\\\.\\pipe\\ToSrvPipe"
 PIPE_FROM_AUDACITY = "\\\\.\\pipe\\FromSrvPipe"
 
@@ -12,11 +13,24 @@ def start_audacity():
         # Start Audacity
         subprocess.Popen(AUDACITY_PATH)
         time.sleep(5)  # Give Audacity some time to start
-    except Exception as e:
-        raise Exception(f"Error starting Audacity: {e}")
+    except subprocess.SubprocessError as e:
+        raise RuntimeError(f"Error starting Audacity: {e}")
 
 def main():
     named_pipe = NamedPipe(PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY)
+
+    try:
+        os.path.exists(PIPE_TO_AUDACITY)
+    except Exception as e:
+        print(e)
+        return
+    
+    try:
+        os.path.exists(PIPE_FROM_AUDACITY)
+    except Exception as e:
+        print(e)
+        return
+
     try:
         named_pipe.open()
     except Exception as e:
