@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-import os
 import time
+
+DEFAULT_RETRY_ATTEMPTS = 5
+DEFAULT_RETRY_DELAY = 1  # seconds
 
 class Pipe(ABC):
     @abstractmethod
@@ -12,7 +14,7 @@ class Pipe(ABC):
         pass
 
 class NamedPipe(Pipe):
-    def __init__(self, to_pipe_path: str, from_pipe_path: str, retry_attempts=5, retry_delay=1):
+    def __init__(self, to_pipe_path: str, from_pipe_path: str, retry_attempts=DEFAULT_RETRY_ATTEMPTS, retry_delay=DEFAULT_RETRY_DELAY):
         self.to_pipe_path = to_pipe_path
         self.from_pipe_path = from_pipe_path
         self.retry_attempts = retry_attempts
