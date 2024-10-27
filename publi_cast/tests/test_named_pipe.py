@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, mock_open, MagicMock
-from publi_cast.repositories.audacity_repository import NamedPipe
+from repositories.audacity_repository import NamedPipe
 
 class TestNamedPipe(unittest.TestCase):
     @patch("builtins.open", new_callable=mock_open)
