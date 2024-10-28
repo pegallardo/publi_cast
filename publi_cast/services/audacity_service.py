@@ -1,35 +1,39 @@
-import time
-from repositories.audacity_repository import Pipe
+from services.logger_service import LoggerService
+import win32file
+
+logger = LoggerService()
 
 class AudacityAPI:
     def __init__(self):
         self.pipe = None
+        logger.info("Initialized AudacityAPI")
 
-    def set_pipe(self, pipe: Pipe):
+    def set_pipe(self, pipe):
         self.pipe = pipe
+        logger.info("Pipe set for AudacityAPI")
 
-    def send_command(self, command: str):
-        self.pipe.write(command)
+    def run_command(self, command):
+        if not self.pipe:
+            error_msg = "Pipe not set"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
-    def get_response(self) -> str:
-        return self.pipe.read()
-
-    def run_command(self, command: str) -> str:
         try:
-            # Send command to Audacity
-            self.send_command(command)
-            print(f"Command sent: {command}")
+            # Replace backslashes with forward slashes and escape special characters
+            if "Import2:Filename=" in command:
+                file_path = command.split("Import2:Filename=")[1].strip("'")
+                safe_path = file_path.replace("\\", "/").replace('"', '\\"')
+                command = f'Import2:Filename="{safe_path}"'
 
-            # Attempt to get response from Audacity
-            response = self.get_response()
-            time.sleep(1)  # Give Audacity time to respond
-            # Validate the response
-            if not response:
-                raise ValueError("No response received from Audacity.")
+            logger.info(f"Running Audacity command: {command}")
+            encoded_command = (command + '\n').encode('utf-8')
+            win32file.WriteFile(self.pipe.pipe_in, encoded_command)
             
-            print(f"Response received: {response}")
-            return response
-        
+            response = win32file.ReadFile(self.pipe.pipe_out, 4096)[1]
+            decoded_response = response.decode('utf-8')
+            logger.info(f"Command response received: {decoded_response}")
+            
+            return decoded_response
         except Exception as e:
-            print(f"Error executing command '{command}': {e}")
-            return f"Error: {e}"
+            logger.error(f"Error running command: {e}")
+            raise
