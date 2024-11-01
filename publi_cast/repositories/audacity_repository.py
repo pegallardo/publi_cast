@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 import os
 import sys
 import time
+import threading
+import queue
 import win32file
 import pywintypes
 from services.logger_service import LoggerService
@@ -33,6 +35,9 @@ class NamedPipe(Pipe):
         self.pipe_in = None
         self.pipe_out = None
         self.logger = logger
+        self.response_queue = queue.Queue()  # Queue for storing pipe responses
+        self.read_thread = None  # Thread for reading pipe_out continuously
+        self.running = False  # Flag to control the read thread
         self.logger.info(f"Initialized NamedPipe with to={self.pipe_to_audacity}, from={self.pipe_from_audacity}")
 
     def open(self):
@@ -60,6 +65,12 @@ class NamedPipe(Pipe):
                 None
             )
             self.logger.info("Pipes opened successfully")
+            
+            # Start a background thread to read from pipe_out continuously
+            self.running = True
+            self.read_thread = threading.Thread(target=self._read_pipe_thread, daemon=True)
+            self.read_thread.start()
+
         except pywintypes.error as e:
             self.logger.error(f"Failed to open pipes: {e}")
             raise
@@ -67,6 +78,7 @@ class NamedPipe(Pipe):
     def close(self):
         try:
             self.logger.info("Closing pipes...")
+            self.running = False  # Stop the reading thread
             if self.pipe_in:
                 win32file.CloseHandle(self.pipe_in)
             if self.pipe_out:
@@ -77,18 +89,33 @@ class NamedPipe(Pipe):
             raise
 
     def write(self, message: str):
+        self.logger.info(f"Writing message to pipe: {message}")
         win32file.WriteFile(self.pipe_in, message.encode() + b'\n')
 
-    def read(self) -> str:
-        response = []
-        while True:
-            result, data = win32file.ReadFile(self.pipe_out, 4096)
-            if result == 0:
-                line = data.decode().strip()
-                if line == "End of Script":
-                    break
-                response.append(line)
-        return "\n".join(response)
+    def read(self, timeout=5) -> str:
+        """Non-blocking read from the response queue with a timeout."""
+        try:
+            # Try to get a response from the queue with a timeout
+            response = self.response_queue.get(timeout=timeout)
+            return response
+        except queue.Empty:
+            self.logger.warning("Timeout waiting for response from pipe.")
+            return "Timeout"
+
+    def _read_pipe_thread(self):
+        """Continuously reads from pipe_out and stores responses in the queue."""
+        while self.running:
+            try:
+                result, data = win32file.ReadFile(self.pipe_out, 4096)
+                if result == 0:
+                    line = data.decode().strip()
+                    self.logger.info(f"Read line from pipe: {line}")
+                    if line:
+                        self.response_queue.put(line)
+            except pywintypes.error as e:
+                if self.running:  # Log only if the pipe is still expected to be open
+                    self.logger.error(f"Error reading from pipe: {e}")
+            time.sleep(0.1)  # Slight delay to prevent excessive CPU usage
 
     def wait_for_pipe(self, pipe_path, max_attempts=10, delay=1):
         for attempt in range(max_attempts):

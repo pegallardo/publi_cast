@@ -39,15 +39,16 @@ def main():
 
     # Commands to be sent to Audacity
     commands = [
-        f"Import2:Filename='{audio_file}'",
-        "SelectAll",
-        "Amplify:Ratio=2",
-        "Normalize:PeakLevel=-3.0",
-        "Echo:Delay=0.5 Decay=0.5",
-        "BassAndTreble:BassGain=5 TrebleGain=-5",
-        "Compressor:Threshold=-20 NoiseFloor=-40 Ratio=2.5 AttackTime=0.2 DecayTime=1.0",
-        "Reverb:Reverb=50 RoomSize=100",
-        "Export2:Filename='output.wav' NumChannels=2",
+        'Help: CommandName=Import2\n',
+        f'Import2:Filename="{audio_file}"',
+        'SelectAll',
+        'Amplify:Ratio=2',
+        'Normalize:PeakLevel=-3.0',
+        'Echo:Delay=0.5 Decay=0.5',
+        'BassAndTreble:BassGain=5 TrebleGain=-5',
+        'Compressor:Threshold=-20 NoiseFloor=-40 Ratio=2.5 AttackTime=0.2 DecayTime=1.0',
+        'Reverb:Reverb=50 RoomSize=100',
+        'Export2:Filename="output.wav" NumChannels=2',
     ]
 
     # Execute each command and handle any command-specific errors
