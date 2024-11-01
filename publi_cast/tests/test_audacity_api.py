@@ -1,32 +1,40 @@
 import unittest
-from unittest.mock import MagicMock
-from publi_cast.services.audacity_service import AudacityAPI
-from publi_cast.repositories.audacity_repository import Pipe
+from unittest.mock import Mock, patch
+from services.audacity_service import AudacityAPI
 
 class TestAudacityAPI(unittest.TestCase):
     def setUp(self):
-        self.pipe_mock = MagicMock(spec=Pipe)
-        self.api = AudacityAPI()
-        self.api.set_pipe(self.pipe_mock)
+        self.mock_logger = Mock()
+        self.mock_pipe = Mock()
+        self.api = AudacityAPI(self.mock_pipe, self.mock_logger)
 
-    def test_send_command(self):
-        command = "GenerateTone:Frequency=440 Duration=1"
-        self.api.send_command(command)
-        self.pipe_mock.write.assert_called_once_with(command + '\n')
+    @patch('subprocess.Popen')
+    def test_start_audacity_success(self, mock_popen):
+        mock_process = Mock()
+        mock_process.poll.return_value = None
+        mock_popen.return_value = mock_process
+        
+        result = self.api.start_audacity()
+        
+        self.assertEqual(result, mock_process)
+        self.mock_logger.info.assert_called_with("Audacity started successfully")
 
-    def test_get_response(self):
-        expected_response = "Response"
-        self.pipe_mock.read.return_value = expected_response
-        response = self.api.get_response()
-        self.assertEqual(response, expected_response)
+    @patch('subprocess.Popen')
+    def test_start_audacity_retry_success(self, mock_popen):
+        mock_process = Mock()
+        mock_process.poll.side_effect = [1, None]
+        mock_popen.return_value = mock_process
+        
+        result = self.api.start_audacity(retry_attempts=2)
+        
+        self.assertEqual(result, mock_process)
+        self.assertEqual(mock_popen.call_count, 2)
 
-    def test_run_command(self):
-        command = "GenerateTone:Frequency=440 Duration=1"
-        expected_response = "Response"
-        self.pipe_mock.read.return_value = expected_response
-        response = self.api.run_command(command)
-        self.pipe_mock.write.assert_called_once_with(command + '\n')
-        self.assertEqual(response, expected_response)
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_run_command_success(self):
+        self.api.pipe = self.mock_pipe
+        self.mock_pipe.write.return_value = None
+        self.mock_pipe.read.return_value = "OK"
+        
+        response = self.api.run_command("TestCommand")
+        
+        self.assertEqual(response, "OK")

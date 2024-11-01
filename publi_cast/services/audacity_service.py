@@ -46,14 +46,19 @@ class AudacityAPI:
 
         try:
             self.logger.info(f"Running Audacity command: {command}")
-            encoded_command = (command + '\n').encode('utf-8')
-            win32file.WriteFile(self.pipe.pipe_in, encoded_command)
+            self.pipe.write(command)
+            decoded_response = self.pipe.read()
             
-            response = win32file.ReadFile(self.pipe.pipe_out, 4096)[1]
-            decoded_response = response.decode('utf-8')
+            if "FileNotFound" in decoded_response or "Error:" in decoded_response:
+                error_msg = f"Audacity command failed: {decoded_response}"
+                self.logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
+                
             self.logger.info(f"Command response received: {decoded_response}")
-            
             return decoded_response
+            
+        except FileNotFoundError:
+            raise
         except Exception as e:
             self.logger.error(f"Error running command: {e}")
             raise

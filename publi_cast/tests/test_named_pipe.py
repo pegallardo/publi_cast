@@ -1,34 +1,28 @@
 import unittest
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import Mock, patch
 from repositories.audacity_repository import NamedPipe
 
 class TestNamedPipe(unittest.TestCase):
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.exists", return_value=True)
-    def test_open(self, exists_mock, open_mock):
-        named_pipe = NamedPipe("\\\\.\\pipe\\ToSrvPipe", "\\\\.\\pipe\\FromSrvPipe")
-        named_pipe.open()
-        open_mock.assert_any_call("\\\\.\\pipe\\ToSrvPipe", 'w')
-        open_mock.assert_any_call("\\\\.\\pipe\\FromSrvPipe", 'r')
+    def setUp(self):
+        self.mock_logger = Mock()
+        self.pipe = NamedPipe(self.mock_logger)
 
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.exists", return_value=True)
-    def test_write(self, exists_mock, open_mock):
-        named_pipe = NamedPipe("\\\\.\\pipe\\ToSrvPipe", "\\\\.\\pipe\\FromSrvPipe")
-        named_pipe.open()
-        message = "Test Message"
-        named_pipe.write(message)
-        handle = open_mock()
-        handle.write.assert_called_once_with(message + '\n')
-        handle.flush.assert_called_once()
+    @patch('os.path.exists')
+    @patch('win32file.CreateFile')
+    def test_open_pipe_success(self, mock_create_file, mock_exists):
+        mock_exists.return_value = True
+        mock_create_file.return_value = Mock()
+        
+        self.pipe.open()
+        
+        self.assertEqual(mock_create_file.call_count, 2)
+        self.mock_logger.info.assert_called()
 
-    @patch("builtins.open", new_callable=mock_open, read_data="Line1\nLine2\nEnd of Script\n")
-    @patch("os.path.exists", return_value=True)
-    def test_read(self, exists_mock, open_mock):
-        named_pipe = NamedPipe("\\\\.\\pipe\\ToSrvPipe", "\\\\.\\pipe\\FromSrvPipe")
-        named_pipe.open()
-        response = named_pipe.read()
-        self.assertEqual(response, "Line1\nLine2")
-
-if __name__ == '__main__':
-    unittest.main()
+    @patch('win32file.CloseHandle')
+    def test_close_pipe_success(self, mock_close):
+        self.pipe.pipe_in = Mock()
+        self.pipe.pipe_out = Mock()
+        
+        self.pipe.close()
+        
+        self.assertEqual(mock_close.call_count, 2)

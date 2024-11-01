@@ -8,7 +8,8 @@ setup(
         # Add your dependencies here, e.g.,
         'pyaudio',
         'numpy',
-        'pywin32'
+        'pywin32',
+        'pytest'
     ],
     entry_points={
         'console_scripts': [

@@ -10,7 +10,7 @@ if sys.version_info[0] < 3 and sys.version_info[1] < 7:
 
 def main():
     logger = LoggerService()
-    named_pipe = NamedPipe()
+    named_pipe = NamedPipe(logger)
     audacity_api = AudacityAPI(named_pipe, logger)
 
     logger.info("Starting Publi_Cast application...")
