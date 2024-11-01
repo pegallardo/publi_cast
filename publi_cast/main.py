@@ -1,9 +1,9 @@
 import sys
-import os
-from dialogs.audio_dialog import select_audio_file
 from repositories.audacity_repository import NamedPipe
 from services.audacity_service import AudacityAPI
 from services.logger_service import LoggerService
+from controllers.import_controller import ImportController
+from controllers.export_controller import ExportController
 
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
     sys.exit('PipeClient Error: Python 3.7 or later required')
@@ -12,6 +12,8 @@ def main():
     logger = LoggerService()
     named_pipe = NamedPipe(logger)
     audacity_api = AudacityAPI(named_pipe, logger)
+    import_controller = ImportController(logger)  
+    export_controller = ExportController(audacity_api, logger)
 
     logger.info("Starting Publi_Cast application...")
     audacity_api.start_audacity()
@@ -31,7 +33,10 @@ def main():
     # Prompt for audio file selection
     try:
         logger.info("Prompting user to select audio file...")
-        audio_file = select_audio_file(logger)
+        audio_file = import_controller.select_audio_file()
+        if not audio_file:
+            logger.info("Audio file selection cancelled")
+            return
         logger.info(f"Selected audio file: {audio_file}")
     except Exception as e:
         logger.error(f"Error selecting audio file: {e}")
@@ -61,6 +66,14 @@ def main():
                 logger.info(f"Command response: {response}")
             except Exception as cmd_error:
                 logger.error(f"Error executing command '{command}': {cmd_error}")
+
+        # Handle export with dialog
+        output_path = export_controller.handle_export()
+        if output_path:
+            logger.info(f"Audio exported successfully to: {output_path}")
+        else:
+            logger.info("Export cancelled by user")
+
     except Exception as e:
         logger.error(f"Error during command execution loop: {e}")
     finally:

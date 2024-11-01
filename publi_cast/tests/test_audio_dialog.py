@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-from dialogs.audio_dialog import select_audio_file
+from publi_cast.controllers.import_controller import select_audio_file
 
 class TestAudioDialog(unittest.TestCase):
     @patch('tkinter.filedialog.askopenfilename')
