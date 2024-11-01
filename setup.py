@@ -6,8 +6,9 @@ setup(
     packages=find_packages(),
     install_requires=[
         # Add your dependencies here, e.g.,
-        # 'pyaudio',
-        # 'numpy',
+        'pyaudio',
+        'numpy',
+        'pywin32'
     ],
     entry_points={
         'console_scripts': [

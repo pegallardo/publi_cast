@@ -1,12 +1,23 @@
 from abc import ABC, abstractmethod
+import os
+import sys
 import win32file
 import pywintypes
+from services.logger_service import LoggerService
+from config import PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY
 
-
-DEFAULT_RETRY_ATTEMPTS = 5
-DEFAULT_RETRY_DELAY = 1  # seconds
+logger = LoggerService()
 
 class Pipe(ABC):
+
+    @abstractmethod
+    def open(self) -> str:
+        pass
+
+    @abstractmethod
+    def close(self) -> str:
+        pass
+
     @abstractmethod
     def write(self, message: str):
         pass
@@ -15,21 +26,24 @@ class Pipe(ABC):
     def read(self) -> str:
         pass
 
-
-  
-
 class NamedPipe(Pipe):
 
-    def __init__(self, pipe_to_audacity, pipe_from_audacity, logger):
-        self.pipe_to_audacity = pipe_to_audacity
-        self.pipe_from_audacity = pipe_from_audacity
+    def __init__(self):
+        self.pipe_to_audacity = PIPE_TO_AUDACITY
+        self.pipe_from_audacity = PIPE_FROM_AUDACITY
         self.pipe_in = None
         self.pipe_out = None
         self.logger = logger
-        self.logger.info(f"Initialized NamedPipe with to={pipe_to_audacity}, from={pipe_from_audacity}")
+        self.logger.info(f"Initialized NamedPipe with to={self.pipe_to_audacity}, from={self.pipe_from_audacity}")
 
     def open(self):
         try:
+            # Check if pipe paths exist
+            for pipe_path in [self.pipe_to_audacity, self.pipe_from_audacity]:
+                if not os.path.exists(pipe_path):
+                    self.logger.error(f"Pipe path {pipe_path} does not exist.")
+                    return
+
             self.logger.info("Opening pipes to Audacity...")
             self.pipe_in = win32file.CreateFile(
                 self.pipe_to_audacity,

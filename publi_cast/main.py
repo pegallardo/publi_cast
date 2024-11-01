@@ -1,6 +1,4 @@
-import subprocess
 import sys
-import time
 import os
 from dialogs.audio_dialog import select_audio_file
 from repositories.audacity_repository import NamedPipe
@@ -8,45 +6,16 @@ from services.audacity_service import AudacityAPI
 from services.logger_service import LoggerService
 
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
-    sys.exit('PipeClient Error: Python 2.7 or later required')
-
-AUDACITY_PATH = "C:\\Program Files\\Audacity\\audacity.exe"
-
-# Platform specific constants
-if sys.platform == 'win32':
-    PIPE_TO_AUDACITY = '\\\\.\\pipe\\ToSrvPipe'
-    PIPE_FROM_AUDACITY = '\\\\.\\pipe\\FromSrvPipe'
-    EOL = '\r\n\0'
-else:
-    # Linux or Mac
-    PIPE_BASE = '/tmp/audacity_script_pipe.'
-    PIPE_TO_AUDACITY = PIPE_BASE + 'to.' + str(os.getuid())
-    PIPE_FROM_AUDACITY = PIPE_BASE + 'from.' + str(os.getuid())
-    EOL = '\n'
-
-# Initialize the logger at the top level
-logger = LoggerService()
-
-def start_audacity():
-    try:
-        logger.info("Starting Audacity...")
-        subprocess.Popen(AUDACITY_PATH)
-        time.sleep(5)
-        logger.info("Audacity started successfully")
-    except subprocess.SubprocessError as e:
-        error_message = f"Error starting Audacity: {e}"
-        logger.error(error_message)
-        raise RuntimeError(error_message)
+    sys.exit('PipeClient Error: Python 3.7 or later required')
 
 def main():
-    # Initialize named pipe with logging support
-    named_pipe = NamedPipe(PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY, logger)
+    logger = LoggerService()
+    named_pipe = NamedPipe()
+    audacity_api = AudacityAPI(named_pipe, logger)
 
-    # Check if pipe paths exist
-    for pipe_path in [PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY]:
-        if not os.path.exists(pipe_path):
-            logger.error(f"Pipe path {pipe_path} does not exist.")
-            return
+    logger.info("Starting Publi_Cast application...")
+    audacity_api.start_audacity()
+    logger.info("Application completed successfully")
 
     try:
         logger.info("Opening named pipe...")
@@ -56,8 +25,7 @@ def main():
         logger.error(f"Error opening named pipe: {e}")
         return
 
-    # Initialize Audacity API and set pipe
-    audacity_api = AudacityAPI()
+    # Initialize Audacity pipe
     audacity_api.set_pipe(named_pipe)
 
     # Prompt for audio file selection
@@ -95,7 +63,6 @@ def main():
     except Exception as e:
         logger.error(f"Error during command execution loop: {e}")
     finally:
-        # Attempt to close named pipe and log any issues
         try:
             named_pipe.close()
             logger.info("Named pipe closed successfully")
@@ -104,10 +71,8 @@ def main():
 
 if __name__ == "__main__":
     try:
-        logger.info("Starting Publi_Cast application...")
-        start_audacity()
         main()
-        logger.info("Application completed successfully")
     except Exception as e:
+        logger = LoggerService()
         logger.error(f"Unexpected error: {e}")
         print(e)
