@@ -1,9 +1,13 @@
 import sys
+import pygetwindow as gw
 from repositories.audacity_repository import NamedPipe
 from services.audacity_service import AudacityAPI
 from services.logger_service import LoggerService
+from services.compressor_service import Compressor
 from controllers.import_controller import ImportController
 from controllers.export_controller import ExportController
+
+from config import COMPRESSION_SETTINGS
 
 if sys.version_info[0] < 3 and sys.version_info[1] < 7:
     sys.exit('PipeClient Error: Python 3.7 or later required')
@@ -14,10 +18,17 @@ def main():
     audacity_api = AudacityAPI(named_pipe, logger)
     import_controller = ImportController(logger)  
     export_controller = ExportController(audacity_api, logger)
+    compressor = Compressor(**COMPRESSION_SETTINGS)
 
     logger.info("Starting Publi_Cast application...")
     audacity_api.start_audacity()
-    logger.info("Application completed successfully")
+    # Minimize the window
+    audacity_window = gw.getWindowsWithTitle('Audacity')
+    if audacity_window:
+        audacity_window[0].minimize()
+    else:
+        print("Audacity window not found.")
+        logger.info("Application completed successfully")
 
     try:
         logger.info("Opening named pipe...")
@@ -44,16 +55,10 @@ def main():
 
     # Commands to be sent to Audacity
     commands = [
-        'Help: CommandName=Import2\n',
         f'Import2:Filename="{audio_file}"',
         'SelectAll',
-        'Amplify:Ratio=2',
-        'Normalize:PeakLevel=-3.0',
-        'Echo:Delay=0.5 Decay=0.5',
-        'BassAndTreble:BassGain=5 TrebleGain=-5',
-        'Compressor:Threshold=-20 NoiseFloor=-40 Ratio=2.5 AttackTime=0.2 DecayTime=1.0',
-        'Reverb:Reverb=50 RoomSize=100',
-        'Export2:Filename="output.wav" NumChannels=2',
+        'Filter Curve EQ:FilterType=Draw Points="20 15; 100 12; 500 6; 1000 0; 10000 0; 20000 -3"',
+        'Normalize:RemoveDcOffset=True PeakLevel=-1.0 NormalizeStereo=False'
     ]
 
     # Execute each command and handle any command-specific errors
@@ -67,6 +72,19 @@ def main():
             except Exception as cmd_error:
                 logger.error(f"Error executing command '{command}': {cmd_error}")
 
+        try:
+            logger.info("Applying compression...")
+            # See config.py for compression settings
+            response = compressor.process_direct(response)
+            logger.info(f"Command response after compression: {response}")
+            
+        except ValueError as ve:
+            logger.error(f"Invalid values for compression: {ve}")
+        except TypeError as te:
+            logger.error(f"Invalid data type for compression: {te}")
+        except Exception as e:
+            logger.error(f"Unexpected error during compression: {e}")
+        
         # Handle export with dialog
         output_path = export_controller.handle_export()
         if output_path:

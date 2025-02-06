@@ -15,3 +15,12 @@ AUDACITY_PATH = "C:\\Program Files\\Audacity\\audacity.exe"
 
 DEFAULT_RETRY_ATTEMPTS = 5
 DEFAULT_RETRY_DELAY = 1  # seconds
+
+# Compression settings
+COMPRESSION_SETTINGS = {
+    'compress_ratio': 0.8,
+    'hardness': 0.879,
+    'floor': -18,
+    'noise_factor': 0,
+    'scale_max': 0.99
+}
