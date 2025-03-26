@@ -1,2 +1,14 @@
 dependency-injector
+numpy
+scipy
+soundfile
+pygetwindow
+google-api-core
+google-auth
+pip
+setuptools
+pywin32
+rich
+distlib
+jaraco.context
 pytest

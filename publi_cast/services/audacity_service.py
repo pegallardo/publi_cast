@@ -4,6 +4,8 @@ import threading
 import queue
 import sys
 import os
+import soundfile as sf
+import psutil
 from config import AUDACITY_PATH, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, EOL
 
 class AudacityAPI:
@@ -18,6 +20,34 @@ class AudacityAPI:
         self.read_thread = None
 
     def start_audacity(self, retry_attempts=DEFAULT_RETRY_ATTEMPTS, retry_delay=DEFAULT_RETRY_DELAY):
+         # First, check if Audacity is already running and close it
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                proc_name = proc.info['name'].lower()
+                if 'audacity' in proc_name:
+                    self.logger.info("Audacity is already running. Closing it...")
+                    try:
+                        # Try to close gracefully
+                        proc.terminate()
+                        
+                        # Wait up to 5 seconds for the process to terminate
+                        gone, alive = psutil.wait_procs([proc], timeout=5)
+                        
+                        # If still alive, force kill
+                        if alive:
+                            self.logger.warning("Audacity didn't close gracefully, forcing termination")
+                            proc.kill()
+                            # Wait a bit more to ensure it's fully closed
+                            time.sleep(1)
+                            
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+                        self.logger.error(f"Error closing Audacity: {e}")
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        
+        # Wait a moment to ensure ports are freed
+        time.sleep(2)
+        
         for attempt in range(retry_attempts):
             try:
                 self.logger.info(f"Starting Audacity... (Attempt {attempt + 1}/{retry_attempts})")
@@ -104,80 +134,98 @@ class AudacityAPI:
         except Exception as e:
             self.logger.error(f"Error running command: {e}")
             raise
-
-
-# Named Pipe Class for Cross-Platform Pipe Handling
-class NamedPipe:
-    def __init__(self, logger):
-        self.logger = logger
-        if sys.platform == "win32":
-            import win32file
-            import pywintypes
-            self.win32file = win32file
-            self.pywintypes = pywintypes
-        self.pipe_in = None
-        self.pipe_out = None
-        self.logger.info("Initialized NamedPipe")
-
-    def open(self, pipe_to_audacity, pipe_from_audacity):
-        if sys.platform == "win32":
-            # Windows named pipe handling
-            try:
-                self.pipe_in = self.win32file.CreateFile(
-                    pipe_to_audacity,
-                    self.win32file.GENERIC_WRITE,
-                    0,
-                    None,
-                    self.win32file.OPEN_EXISTING,
-                    0,
-                    None
-                )
-                self.pipe_out = self.win32file.CreateFile(
-                    pipe_from_audacity,
-                    self.win32file.GENERIC_READ,
-                    0,
-                    None,
-                    self.win32file.OPEN_EXISTING,
-                    0,
-                    None
-                )
-                self.logger.info("Pipes opened successfully on Windows")
-            except self.pywintypes.error as e:
-                self.logger.error(f"Failed to open pipes: {e}")
-                raise
-        else:
-            # Unix-based systems (macOS, Linux) FIFO handling
-            if not os.path.exists(pipe_to_audacity):
-                os.mkfifo(pipe_to_audacity)
-            if not os.path.exists(pipe_from_audacity):
-                os.mkfifo(pipe_from_audacity)
+    
+    def get_audio_data(self):
+        """
+        Retrieves audio data from Audacity by exporting to a temporary file and reading it back.
+        
+        Returns:
+            Return Tuple: audio_data: np.ndarray, - The audio samples
+        
+        Raises:
+            RuntimeError: If export command fails
+            FileNotFoundError: If temporary file cannot be accessed
+            IOError: If there are issues reading the audio file
+        """
+        # Define temporary file path
+        temp_file = "temp_audio.wav"
+        
+        try:        
+            # Export current Audacity selection to temporary WAV file
+            export_command = f'Export2: Filename="{temp_file}"'
+            response = self.run_command(export_command)
+            
+            if not response or "Error" in response:
+                raise RuntimeError(f"Failed to export audio: {response}")
                 
-            self.pipe_in = open(pipe_to_audacity, 'w')
-            self.pipe_out = open(pipe_from_audacity, 'r')
-            self.logger.info("Pipes opened successfully on Unix-based system")
-
-    def close(self):
-        try:
-            self.logger.info("Closing pipes...")
-            if self.pipe_in:
-                self.pipe_in.close()
-            if self.pipe_out:
-                self.pipe_out.close()
-            self.logger.info("Pipes closed successfully")
-        except Exception as e:
-            self.logger.error(f"Error closing pipes: {e}")
+            # Read the exported audio file
+            audio_data, _ = sf.read(temp_file)
+            
+            return audio_data
+            
+        except FileNotFoundError:
+            self.logger.error(f"Temporary file {temp_file} not found")
             raise
+        except IOError as e:
+            self.logger.error(f"Error reading audio file: {e}")
+            raise
+        finally:
+            # Clean up temporary file if it exists
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except OSError as e:
+                    self.logger.warning(f"Failed to remove temporary file: {e}")
 
-    def write(self, message: str):
-        if sys.platform == "win32":
-            self.win32file.WriteFile(self.pipe_in, message.encode() + b'\n')
-        else:
-            self.pipe_in.write(message + '\n')
-            self.pipe_in.flush()
-
-    def read(self) -> str:
-        if sys.platform == "win32":
-            result, data = self.win32file.ReadFile(self.pipe_out, 4096)
-            return data.decode().strip() if result == 0 else ""
-        else:
-            return self.pipe_out.readline().strip()
+    def close_audacity(self):
+        """
+        Closes the Audacity application gracefully if it's running.
+        
+        This method first checks if Audacity is running, and if so:
+        1. Tries to send a command to close Audacity
+        2. If that fails, finds and closes the Audacity window using pygetwindow
+        3. Logs the outcome of the operation
+        
+        Returns:
+            bool: True if Audacity was closed successfully or wasn't running, 
+                False if it failed to close Audacity
+        """
+        
+        time.sleep(1)
+        
+        # First check if Audacity is running via process name
+        audacity_running = False
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if 'audacity' in proc.info['name'].lower():
+                    audacity_running = True
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        
+        if not audacity_running:
+            self.logger.info("Audacity is not running - no need to close")
+            return True
+        
+        self.logger.info("Audacity is running - attempting to close...")
+        
+        try:
+            # Try to close Audacity using a command
+            response = self.run_command("Exit")
+            time.sleep(5)  # Wait longer to ensure it has time to close
+            
+            # Check if Audacity is still running via process
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if 'audacity' in proc.info['name'].lower():
+                        # If still running, terminate the process
+                        self.logger.info(f"Terminating Audacity process (PID: {proc.info['pid']})")
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+                    self.logger.error(f"Error terminating Audacity: {e}")
+            
+            return True
+        except Exception as e:
+            self.logger.error(f"Error while trying to close Audacity: {e}")
+            return False
