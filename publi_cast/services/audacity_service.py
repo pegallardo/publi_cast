@@ -56,7 +56,7 @@ class AudacityAPI:
                 if sys.platform == "win32":
                     process = subprocess.Popen(AUDACITY_PATH)
                 else:
-                    process = subprocess.Popen([AUDACITY_PATH])
+                    process = subprocess.Popen([AUDACITY_PATH], shell=False)
 
                 time.sleep(retry_delay)
                 
@@ -211,8 +211,8 @@ class AudacityAPI:
         
         try:
             # Try to close Audacity using a command
-            response = self.run_command("Exit")
-            time.sleep(5)  # Wait longer to ensure it has time to close
+            response = self.run_command("Close")
+            time.sleep(2)  # Wait longer to ensure it has time to close
             
             # Check if Audacity is still running via process
             for proc in psutil.process_iter(['pid', 'name']):

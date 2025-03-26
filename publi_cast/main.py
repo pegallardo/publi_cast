@@ -18,7 +18,7 @@ def main():
     import_controller = ImportController(logger)  
     export_controller = ExportController(audacity_api, logger)
 
-    logger.info("Starting Publi_Cast application...")
+    logger.info("Starting PubliCast application...")
     audacity_api.start_audacity()
     
     try:
@@ -32,7 +32,7 @@ def main():
     # Initialize Audacity pipe
     audacity_api.set_pipe(named_pipe)
 
-    # Prompt for audio file selection
+    # Prompt for audio input file selection
     try:
         logger.info("Prompting user to select audio file...")
         audio_file = import_controller.select_audio_file()
@@ -45,9 +45,6 @@ def main():
         return
 
     # Commands to be sent to Audacity
-    
-    
-    # Commands to be sent to Audacity
     commands = [
     f'Import2:Filename="{audio_file}"',
     AUDACITY_COMMANDS['select_all'],
@@ -55,7 +52,6 @@ def main():
     config.build_normalize_command(),
     config.build_compressor_command()
 ]
-
     # Execute each command and handle any command-specific errors
     try:
         logger.info("Starting command execution...")
@@ -67,29 +63,38 @@ def main():
             except Exception as cmd_error:
                 logger.error(f"Error executing command '{command}': {cmd_error}")
 
-        # Export with dialog
-        output_path, format = export_controller.handle_export()
+        # Prompt for audio output file selection
+        try:
+            output_path, format = export_controller.handle_export()
+        except Exception as export_error:
+            logger.error(f"Error handling export: {export_error}")
+            output_path = None
+
         if output_path:
-            if format == '.mp3':
-                response = audacity_api.run_command(f'Export2: Filename="{output_path}" Format=MP3 Bitrate=320 Quality=0 VarMode=0 JointStereo=1 ForceMono=0') 
-            else:
-                response = audacity_api.run_command(f'Export2: Filename="{output_path}" Format=WAV')          
-            logger.info(f"Audio exported successfully to: {output_path}")
+            try:
+                if format == '.mp3':
+                    response = audacity_api.run_command(f'Export2: Filename="{output_path}" Format=MP3 Bitrate=320 Quality=0 VarMode=0 JointStereo=1 ForceMono=0')
+                else:
+                    response = audacity_api.run_command(f'Export2: Filename="{output_path}" Format=WAV')        
+                logger.info(f"Audio exported successfully to: {output_path}")
+            except Exception as export_cmd_error:
+                logger.error(f"Error exporting audio: {export_cmd_error}")
         else:
             logger.info("Export cancelled by user")
-
 
     except Exception as e:
         logger.error(f"Error during command execution loop: {e}")
     finally:
         try:
-            time.sleep(5)
+            response = audacity_api.run_command("RemoveTracks")
+            time.sleep(1)
             audacity_api.close_audacity()
-            #named_pipe.close()
-            logger.info("Named pipe closed successfully")
-        except Exception as close_error:
+            named_pipe.close()
+        except OSError as close_error:
             logger.error(f"Error closing named pipe: {close_error}")
-
+        except Exception as unexpected_error:
+            logger.error(f"Unexpected error closing named pipe: {unexpected_error}")
+            
 if __name__ == "__main__":
     try:
         main()
