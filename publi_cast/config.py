@@ -1,9 +1,35 @@
 import os
 import sys
+import subprocess
+import getpass
 
+# Check if Audacity has mod-script-pipe enabled
+def check_script_pipe_enabled():
+    # Path to Audacity's configuration file
+    if sys.platform == 'win32':
+        appdata = os.getenv('APPDATA')
+        config_path = os.path.join(appdata, "audacity", "audacity.cfg")
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                for line in f:
+                    if "mod-script-pipe" in line and "enabled=1" in line:
+                        return True
+    return False
+
+# Windows pipe configuration
 if sys.platform == 'win32':
-    PIPE_TO_AUDACITY = '\\\\.\\pipe\\ToSrvPipe'
-    PIPE_FROM_AUDACITY = '\\\\.\\pipe\\FromSrvPipe'
+    # Standard pipe names
+    PIPE_TO_AUDACITY = r'\\.\pipe\ToSrvPipe'
+    PIPE_FROM_AUDACITY = r'\\.\pipe\FromSrvPipe'
+    
+    # Alternative pipe names to try
+    ALT_PIPE_TO_AUDACITY = r'\\.\pipe\audacity_script_pipe.to'
+    ALT_PIPE_FROM_AUDACITY = r'\\.\pipe\audacity_script_pipe.from'
+    
+    # Windows 11 specific pipe names (with user ID)
+    username = getpass.getuser()
+    WIN11_PIPE_TO_AUDACITY = fr'\\.\pipe\audacity_script_pipe.to.{username}'
+    WIN11_PIPE_FROM_AUDACITY = fr'\\.\pipe\audacity_script_pipe.from.{username}'
 else:
     PIPE_BASE = '/tmp/audacity_script_pipe.'
     PIPE_TO_AUDACITY = PIPE_BASE + 'to.' + str(os.getuid())
@@ -14,7 +40,7 @@ EOL = '\r\n\0' if sys.platform == 'win32' else '\n'
 AUDACITY_PATH = "C:\\Program Files\\Audacity\\audacity.exe"
 
 DEFAULT_RETRY_ATTEMPTS = 5
-DEFAULT_RETRY_DELAY = 1  # seconds
+DEFAULT_RETRY_DELAY = 2  # seconds
 
 # Audacity command configuration
 COMPRESSOR_SETTINGS = {

@@ -6,6 +6,7 @@ import sys
 import os
 import soundfile as sf
 import psutil
+import config
 from config import AUDACITY_PATH, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, EOL
 
 class AudacityAPI:
@@ -20,62 +21,57 @@ class AudacityAPI:
         self.read_thread = None
 
     def start_audacity(self, retry_attempts=DEFAULT_RETRY_ATTEMPTS, retry_delay=DEFAULT_RETRY_DELAY):
-         # First, check if Audacity is already running and close it
+        # First, check if Audacity is already running
+        audacity_running = False
         for proc in psutil.process_iter(['pid', 'name']):
             try:
                 proc_name = proc.info['name'].lower()
                 if 'audacity' in proc_name:
-                    self.logger.info("Audacity is already running. Closing it...")
-                    try:
-                        # Try to close gracefully
-                        proc.terminate()
-                        
-                        # Wait up to 5 seconds for the process to terminate
-                        gone, alive = psutil.wait_procs([proc], timeout=5)
-                        
-                        # If still alive, force kill
-                        if alive:
-                            self.logger.warning("Audacity didn't close gracefully, forcing termination")
-                            proc.kill()
-                            # Wait a bit more to ensure it's fully closed
-                            time.sleep(1)
-                            
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
-                        self.logger.error(f"Error closing Audacity: {e}")
+                    audacity_running = True
+                    self.logger.info("Audacity is already running")
+                    break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         
-        # Wait a moment to ensure ports are freed
-        time.sleep(2)
-        
-        for attempt in range(retry_attempts):
-            try:
-                self.logger.info(f"Starting Audacity... (Attempt {attempt + 1}/{retry_attempts})")
-                
-                # Start Audacity depending on the OS
-                if sys.platform == "win32":
-                    process = subprocess.Popen(AUDACITY_PATH)
-                else:
-                    process = subprocess.Popen([AUDACITY_PATH], shell=False)
+        # If Audacity is not running, start it
+        if not audacity_running:
+            for attempt in range(retry_attempts):
+                try:
+                    self.logger.info(f"Starting Audacity... (Attempt {attempt + 1}/{retry_attempts})")
+                    
+                    # Start Audacity
+                    if sys.platform == "win32":
+                        process = subprocess.Popen([AUDACITY_PATH])
+                    else:
+                        process = subprocess.Popen([AUDACITY_PATH], shell=False)
 
-                time.sleep(retry_delay)
-                
-                # Check if process is running
-                if process.poll() is None:
-                    self.logger.info("Audacity started successfully")
-                    return process
-                
-                self.logger.warning(f"Audacity failed to start on attempt {attempt + 1}")
-                
-            except subprocess.SubprocessError as e:
-                self.logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                if attempt < retry_attempts - 1:
-                    time.sleep(retry_delay)
-                continue
+                    time.sleep(retry_delay * 3)  # Give more time for Audacity to initialize
+                    
+                    # Check if process is running
+                    if process.poll() is None:
+                        self.logger.info("Audacity started successfully")
+                        break
+                    
+                    self.logger.warning(f"Audacity failed to start on attempt {attempt + 1}")
+                    
+                except subprocess.SubprocessError as e:
+                    self.logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                    if attempt < retry_attempts - 1:
+                        time.sleep(retry_delay)
+                    continue
+            else:
+                error_message = f"Failed to start Audacity after {retry_attempts} attempts"
+                self.logger.error(error_message)
+                raise RuntimeError(error_message)
         
-        error_message = f"Failed to start Audacity after {retry_attempts} attempts"
-        self.logger.error(error_message)
-        raise RuntimeError(error_message)
+        # Check if mod-script-pipe is enabled
+        if hasattr(config, 'check_script_pipe_enabled') and callable(config.check_script_pipe_enabled):
+            if not config.check_script_pipe_enabled():
+                self.logger.warning("mod-script-pipe may not be enabled in Audacity. Please enable it in Preferences > Modules.")
+                
+                
+        
+        return True
 
     def set_pipe(self, pipe):
         self.pipe = pipe

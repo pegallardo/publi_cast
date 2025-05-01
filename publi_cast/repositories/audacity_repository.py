@@ -6,6 +6,7 @@ import threading
 import queue
 import win32file
 import pywintypes
+import config
 from services.logger_service import LoggerService
 from config import PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY
 
@@ -35,19 +36,80 @@ class NamedPipe(Pipe):
         self.pipe_in = None
         self.pipe_out = None
         self.logger = logger
-        self.response_queue = queue.Queue()  # Queue for storing pipe responses
-        self.read_thread = None  # Thread for reading pipe_out continuously
-        self.running = False  # Flag to control the read thread
+        self.response_queue = queue.Queue()
+        self.read_thread = None
+        self.running = False
         self.logger.info(f"Initialized NamedPipe with to={self.pipe_to_audacity}, from={self.pipe_from_audacity}")
 
     def open(self):
-        if not self.wait_for_pipe(self.pipe_to_audacity) or not self.wait_for_pipe(self.pipe_from_audacity):
-            raise RuntimeError("Pipes not available after maximum attempts")
+        # First, let's log all available pipes to diagnose the issue
+        self.logger.info("Listing all available pipes in the system...")
+        all_pipes = self.list_available_pipes()
+        self.logger.info(f"Found {len(all_pipes)} pipes: {all_pipes}")
+        
+        # Try to force Audacity to create pipes by sending a command to enable mod-script-pipe
+        self.logger.info("Attempting to force Audacity to create pipes...")
+        self._force_audacity_pipes()
+        
+        # Wait a moment for pipes to be created
+        time.sleep(3)
+        
+        # Check again for pipes
+        all_pipes = self.list_available_pipes()
+        self.logger.info(f"After forcing: Found {len(all_pipes)} pipes: {all_pipes}")
+        
+        # Try all possible pipe naming conventions
+        pipe_pairs = [
+            (self.pipe_to_audacity, self.pipe_from_audacity),
+            (config.ALT_PIPE_TO_AUDACITY, config.ALT_PIPE_FROM_AUDACITY) if hasattr(config, 'ALT_PIPE_TO_AUDACITY') else (None, None),
+            (config.WIN11_PIPE_TO_AUDACITY, config.WIN11_PIPE_FROM_AUDACITY) if hasattr(config, 'WIN11_PIPE_TO_AUDACITY') else (None, None)
+        ]
+        
+        for to_pipe, from_pipe in pipe_pairs:
+            if to_pipe and from_pipe:
+                self.logger.info(f"Trying pipe pair: {to_pipe}, {from_pipe}")
+                try:
+                    if self.try_connect_pipes(to_pipe, from_pipe):
+                        self.logger.info(f"Successfully connected to pipes: {to_pipe}, {from_pipe}")
+                        return
+                except Exception as e:
+                    self.logger.error(f"Error connecting to pipes {to_pipe}, {from_pipe}: {e}")
+        
+        # If we get here, try a more aggressive approach - look for ANY pipes
+        self.logger.info("Trying to find ANY available pipes...")
+        for pipe in all_pipes:
+            if 'audacity' in pipe.lower() or 'pipe' in pipe.lower():
+                full_pipe = r'\\.\pipe\\' + pipe
+                self.logger.info(f"Trying to connect to pipe: {full_pipe}")
+                try:
+                    # Try this as both input and output
+                    self.pipe_in = win32file.CreateFile(
+                        full_pipe,
+                        win32file.GENERIC_WRITE,
+                        0, None, win32file.OPEN_EXISTING, 0, None
+                    )
+                    self.logger.info(f"Successfully connected to pipe as input: {full_pipe}")
+                    break
+                except Exception as e:
+                    self.logger.error(f"Failed to connect to pipe as input: {e}")
+        
+        # If we still can't connect, raise an error with detailed information
+        self.logger.error("Failed to connect to any Audacity pipes")
+        error_message = (
+            "Could not connect to Audacity pipes. Please ensure:\n"
+            "1. Audacity is running\n"
+            "2. mod-script-pipe is enabled in Preferences > Modules\n"
+            "3. You've restarted Audacity after enabling mod-script-pipe\n"
+            "4. You're running this application with the same privileges as Audacity\n"
+            f"Available pipes: {all_pipes}"
+        )
+        raise RuntimeError(error_message)
 
+    def try_connect_pipes(self, to_pipe, from_pipe):
         try:
-            self.logger.info("Opening pipes to Audacity...")
+            self.logger.info(f"Opening pipes to Audacity: {to_pipe}, {from_pipe}")
             self.pipe_in = win32file.CreateFile(
-                self.pipe_to_audacity,
+                to_pipe,
                 win32file.GENERIC_WRITE,
                 0,
                 None,
@@ -56,7 +118,7 @@ class NamedPipe(Pipe):
                 None
             )
             self.pipe_out = win32file.CreateFile(
-                self.pipe_from_audacity,
+                from_pipe,
                 win32file.GENERIC_READ,
                 0,
                 None,
@@ -70,10 +132,10 @@ class NamedPipe(Pipe):
             self.running = True
             self.read_thread = threading.Thread(target=self._read_pipe_thread, daemon=True)
             self.read_thread.start()
-
+            return True
         except pywintypes.error as e:
             self.logger.error(f"Failed to open pipes: {e}")
-            raise
+            return False
 
     def close(self):
         try:
@@ -125,3 +187,85 @@ class NamedPipe(Pipe):
             self.logger.info(f"Waiting for pipe {pipe_path}, attempt {attempt + 1}/{max_attempts}")
             time.sleep(delay)
         return False
+
+    def list_available_pipes(self):
+        """List all available named pipes in the system"""
+        if sys.platform == 'win32':
+            try:
+                import subprocess
+                cmd = "powershell -Command \"[System.IO.Directory]::GetFiles('\\\\.\\pipe\\') | ForEach-Object { $_.Substring(9) }\""
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                pipes = result.stdout.strip().split('\n')
+                self.logger.info(f"Available pipes: {pipes}")
+                return pipes
+            except Exception as e:
+                self.logger.error(f"Error listing pipes: {e}")
+                return []
+        else:
+            # For Unix-like systems
+            try:
+                import glob
+                pipes = glob.glob('/tmp/audacity_script_pipe.*')
+                self.logger.info(f"Available pipes: {pipes}")
+                return pipes
+            except Exception as e:
+                self.logger.error(f"Error listing pipes: {e}")
+                return []
+
+    def _force_audacity_pipes(self):
+        """Try to force Audacity to create pipes by sending keyboard shortcuts"""
+        try:
+            import pyautogui
+            # Try to focus Audacity window
+            self.logger.info("Attempting to focus Audacity window...")
+            
+            # Try to find Audacity window
+            import pygetwindow as gw
+            audacity_windows = gw.getWindowsWithTitle('Audacity')
+            
+            if audacity_windows:
+                audacity_window = audacity_windows[0]
+                audacity_window.activate()
+                time.sleep(1)
+                
+                # Send keyboard shortcut to open preferences
+                self.logger.info("Sending keyboard shortcut to open preferences...")
+                pyautogui.hotkey('ctrl', 'p')
+                time.sleep(1)
+                
+                # Navigate to Modules section (may need adjustment based on Audacity version)
+                self.logger.info("Navigating to Modules section...")
+                pyautogui.press('tab', presses=10, interval=0.1)  # Navigate to category list
+                
+                # Type "modules" to jump to that section
+                pyautogui.write('modules')
+                time.sleep(0.5)
+                pyautogui.press('enter')
+                time.sleep(0.5)
+                
+                # Find and enable mod-script-pipe
+                pyautogui.press('tab', presses=5, interval=0.1)  # Navigate to module list
+                pyautogui.write('mod-script-pipe')
+                time.sleep(0.5)
+                pyautogui.press('space')  # Toggle the module
+                time.sleep(0.5)
+                
+                # Apply changes
+                pyautogui.press('enter')
+                time.sleep(0.5)
+                
+                # Restart Audacity (this is a drastic measure)
+                self.logger.info("Attempting to restart Audacity...")
+                audacity_window.close()
+                time.sleep(2)
+                
+                # Start Audacity again
+                import subprocess
+                subprocess.Popen([config.AUDACITY_PATH])
+                time.sleep(5)  # Wait for Audacity to start
+                
+                self.logger.info("Audacity restarted, pipes should be created now")
+            else:
+                self.logger.warning("Could not find Audacity window")
+        except Exception as e:
+            self.logger.error(f"Error forcing Audacity pipes: {e}")
