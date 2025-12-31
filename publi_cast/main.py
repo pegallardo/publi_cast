@@ -1,16 +1,17 @@
 import sys
-import config
 import time
 import os
-from repositories.audacity_repository import NamedPipe
-from services.audacity_service import AudacityAPI
-from services.logger_service import LoggerService
-from controllers.import_controller import ImportController
-from controllers.export_controller import ExportController
-from config import AUDACITY_COMMANDS
 
-if sys.version_info[0] < 3 and sys.version_info[1] < 7:
-    sys.exit('PipeClient Error: Python 3.7 or later required')
+from publi_cast import config
+from publi_cast.config import AUDACITY_COMMANDS
+from publi_cast.repositories.audacity_repository import NamedPipe
+from publi_cast.services.audacity_service import AudacityAPI
+from publi_cast.services.logger_service import LoggerService
+from publi_cast.controllers.import_controller import ImportController
+from publi_cast.controllers.export_controller import ExportController
+
+if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
+    sys.exit('PubliCast Error: Python 3.7 or later required')
 
 def main():
     logger = LoggerService()

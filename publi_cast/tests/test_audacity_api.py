@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-from services.audacity_service import AudacityAPI
+from publi_cast.services.audacity_service import AudacityAPI
 
 class TestAudacityAPI(unittest.TestCase):
     def setUp(self):

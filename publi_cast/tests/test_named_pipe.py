@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import Mock, patch
-from repositories.audacity_repository import NamedPipe
+from publi_cast.repositories.audacity_repository import NamedPipe
 
 class TestNamedPipe(unittest.TestCase):
     def setUp(self):

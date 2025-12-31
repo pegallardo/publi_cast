@@ -12,3 +12,5 @@ rich
 distlib
 jaraco.context
 pytest
+psutil
+pyautogui

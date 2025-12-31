@@ -1,0 +1,16 @@
+core.repositoryformatversion=0
+core.filemode=false
+core.bare=false
+core.logallrefupdates=true
+core.symlinks=false
+core.ignorecase=true
+core.autocrlf=true
+core.eol=lf
+remote.origin.url=https://github.com/pegallardo/publi_cast.git
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
+pull.rebase=false
+init.defaultbranch=main
+user.name=pegallardo
+user.email=votre-email@example.com

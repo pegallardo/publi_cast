@@ -6,9 +6,10 @@ import threading
 import queue
 import win32file
 import pywintypes
-import config
-from services.logger_service import LoggerService
-from config import PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY
+
+from publi_cast import config
+from publi_cast.config import PIPE_TO_AUDACITY, PIPE_FROM_AUDACITY
+from publi_cast.services.logger_service import LoggerService
 
 logger = LoggerService()
 

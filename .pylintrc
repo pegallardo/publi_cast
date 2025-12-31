@@ -1,0 +1,24 @@
+[MASTER]
+ignore=venv,.venv,env,.env,build,dist,.git
+jobs=1
+
+[MESSAGES CONTROL]
+disable=
+    C0111,  # missing-docstring
+    C0103,  # invalid-name
+    R0903,  # too-few-public-methods
+    R0913,  # too-many-arguments
+    W0703,  # broad-except (we use this intentionally for logging)
+
+[FORMAT]
+max-line-length=100
+indent-string='    '
+
+[BASIC]
+good-names=i,j,k,ex,_,logger,e,f,x,y
+
+[DESIGN]
+max-args=7
+max-attributes=10
+max-locals=15
+

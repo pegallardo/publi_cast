@@ -6,8 +6,9 @@ import sys
 import os
 import soundfile as sf
 import psutil
-import config
-from config import AUDACITY_PATH, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, EOL
+
+from publi_cast import config
+from publi_cast.config import AUDACITY_PATH, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, EOL
 
 class AudacityAPI:
     def __init__(self, named_pipe, logger):
