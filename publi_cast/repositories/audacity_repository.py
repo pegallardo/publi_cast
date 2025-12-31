@@ -42,17 +42,38 @@ class NamedPipe(Pipe):
         self.running = False
         self.logger.info(f"Initialized NamedPipe with to={self.pipe_to_audacity}, from={self.pipe_from_audacity}")
 
-    def open(self):
-        # Wait for pipes to be created (increased timeout for slower systems)
-        time.sleep(10)
+    def is_open(self):
+        """Check if the pipe is already open and connected."""
+        return self.pipe_in is not None and self.pipe_out is not None and self.running
 
-        self.logger.info("Listing all available pipes in the system...")
+    def open(self):
+        # Skip if already open
+        if self.is_open():
+            self.logger.info("Pipe already open, reusing existing connection")
+            return
+
+        # Active wait for pipes to be created (max 30 seconds, check every 0.5s)
+        self.logger.info("Waiting for Audacity pipes to be created...")
+        max_wait_seconds = 30
+        check_interval = 0.5
+        elapsed = 0
+
+        while elapsed < max_wait_seconds:
+            all_pipes = self.list_available_pipes()
+            audacity_pipes = [p for p in all_pipes if 'audacity' in p.lower() or 'tosrv' in p.lower() or 'fromsrv' in p.lower()]
+
+            if audacity_pipes:
+                self.logger.info(f"Audacity pipes detected after {elapsed:.1f}s")
+                break
+
+            time.sleep(check_interval)
+            elapsed += check_interval
+
+            # Log progress every 5 seconds
+            if elapsed % 5 < check_interval:
+                self.logger.info(f"Still waiting for pipes... ({elapsed:.0f}s / {max_wait_seconds}s)")
+
         all_pipes = self.list_available_pipes()
-        self.logger.info(f"Found {len(all_pipes)} pipes: {all_pipes}")
-        
-        # Check for pipes
-        all_pipes = self.list_available_pipes()
-        self.logger.info(f"After forcing: Found {len(all_pipes)} pipes: {all_pipes}")
         
         # Try all possible pipe naming conventions
         pipe_pairs = [
@@ -134,36 +155,63 @@ class NamedPipe(Pipe):
             return False
 
     def close(self):
+        # Skip if already closed
+        if not self.is_open():
+            self.logger.info("Pipes already closed")
+            return
+
         try:
             self.logger.info("Closing pipes...")
-            self.running = False  # Stop the reading thread
+            # Stop the reading thread first
+            self.running = False
+
+            # Wait for read thread to stop (with timeout)
+            if self.read_thread and self.read_thread.is_alive():
+                self.read_thread.join(timeout=1.0)
+
+            # Now close the handles
             if self.pipe_in:
                 win32file.CloseHandle(self.pipe_in)
+                self.pipe_in = None
             if self.pipe_out:
                 win32file.CloseHandle(self.pipe_out)
+                self.pipe_out = None
+
+            self.read_thread = None
             self.logger.info("Pipes closed successfully")
         except Exception as e:
             self.logger.error(f"Error closing pipes: {e}")
-            raise
+            # Reset state even on error
+            self.pipe_in = None
+            self.pipe_out = None
+            self.running = False
 
     def write(self, message: str):
         self.logger.info(f"Writing message to pipe: {message}")
         win32file.WriteFile(self.pipe_in, message.encode() + b'\n')
 
-    def read(self, timeout=5) -> str:
-        """Non-blocking read from the response queue with a timeout."""
+    def read(self, timeout=5, silent=False) -> str:
+        """Non-blocking read from the response queue with a timeout.
+
+        Args:
+            timeout: Maximum seconds to wait for response
+            silent: If True, don't log warning on timeout (useful for polling)
+        """
         try:
             # Try to get a response from the queue with a timeout
             response = self.response_queue.get(timeout=timeout)
             return response
         except queue.Empty:
-            self.logger.warning("Timeout waiting for response from pipe.")
+            if not silent:
+                self.logger.warning("Timeout waiting for response from pipe.")
             return "Timeout"
 
     def _read_pipe_thread(self):
         """Continuously reads from pipe_out and stores responses in the queue."""
         while self.running:
             try:
+                if not self.pipe_out:
+                    break
                 result, data = win32file.ReadFile(self.pipe_out, 4096)
                 if result == 0:
                     line = data.decode().strip()
@@ -171,7 +219,11 @@ class NamedPipe(Pipe):
                     if line:
                         self.response_queue.put(line)
             except pywintypes.error as e:
-                if self.running:  # Log only if the pipe is still expected to be open
+                # Error 109 = pipe closed, exit silently
+                if e.winerror == 109:
+                    self.logger.info("Pipe closed, stopping read thread")
+                    break
+                elif self.running:
                     self.logger.error(f"Error reading from pipe: {e}")
             time.sleep(0.1)  # Slight delay to prevent excessive CPU usage
 
@@ -192,7 +244,6 @@ class NamedPipe(Pipe):
                 cmd = "powershell -Command \"[System.IO.Directory]::GetFiles('\\\\.\\pipe\\') | ForEach-Object { $_.Substring(9) }\""
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 pipes = result.stdout.strip().split('\n')
-                self.logger.info(f"Available pipes: {pipes}")
                 return pipes
             except Exception as e:
                 self.logger.error(f"Error listing pipes: {e}")
@@ -202,7 +253,6 @@ class NamedPipe(Pipe):
             try:
                 import glob
                 pipes = glob.glob('/tmp/audacity_script_pipe.*')
-                self.logger.info(f"Available pipes: {pipes}")
                 return pipes
             except Exception as e:
                 self.logger.error(f"Error listing pipes: {e}")

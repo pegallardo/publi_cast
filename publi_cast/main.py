@@ -2,6 +2,10 @@ import sys
 import time
 import os
 
+# Add parent directory to path for direct execution
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from publi_cast import config
 from publi_cast.config import AUDACITY_COMMANDS
 from publi_cast.repositories.audacity_repository import NamedPipe
@@ -9,80 +13,94 @@ from publi_cast.services.audacity_service import AudacityAPI
 from publi_cast.services.logger_service import LoggerService
 from publi_cast.controllers.import_controller import ImportController
 from publi_cast.controllers.export_controller import ExportController
+from publi_cast.gui.main_window import MainWindow
 
 if sys.version_info[0] < 3 or (sys.version_info[0] == 3 and sys.version_info[1] < 7):
     sys.exit('PubliCast Error: Python 3.7 or later required')
 
-def main():
-    logger = LoggerService()
-    named_pipe = NamedPipe(logger)
-    audacity_api = AudacityAPI(named_pipe, logger)
-    import_controller = ImportController(logger)  
-    export_controller = ExportController(audacity_api, logger)
 
-    logger.info("Starting PubliCast application...")
-    
+# Global references for GUI mode
+_logger = None
+_named_pipe = None
+_audacity_api = None
+_import_controller = None
+_export_controller = None
+_main_window = None
+
+
+def init_services():
+    """Initialize all services."""
+    global _logger, _named_pipe, _audacity_api, _import_controller, _export_controller, _main_window
+
+    _logger = LoggerService()
+
+    # Add GUI handler if window exists
+    if _main_window:
+        _logger.add_handler(_main_window.get_log_handler())
+
+    _named_pipe = NamedPipe(_logger)
+    _audacity_api = AudacityAPI(_named_pipe, _logger)
+    _import_controller = ImportController(_logger)
+    _export_controller = ExportController(_audacity_api, _logger)
+
+
+def process_audio_file():
+    """Process a single audio file - called from GUI."""
+    global _logger, _named_pipe, _audacity_api, _import_controller, _export_controller
+
+    # Initialize services if not already done
+    if _logger is None:
+        init_services()
+
+    logger = _logger
+    named_pipe = _named_pipe
+    audacity_api = _audacity_api
+    import_controller = _import_controller
+    export_controller = _export_controller
+
+    logger.info("Starting audio processing...")
+
     # First, try to start Audacity
     try:
         audacity_api.start_audacity()
     except Exception as e:
         logger.error(f"Error starting Audacity: {e}")
         return
-    
+
     # Run diagnostic to check pipe availability
-    logger.info("Running pipe diagnostic...")
+    logger.info("Checking pipe availability...")
     pipes_available = False
-    
+
     try:
         # List all available pipes
         available_pipes = named_pipe.list_available_pipes()
-        logger.info(f"Available pipes: {available_pipes}")
-        
+
         # Check if any Audacity-related pipes exist
         audacity_pipes = [p for p in available_pipes if 'audacity' in p.lower() or 'tosrv' in p.lower() or 'fromsrv' in p.lower()]
         if audacity_pipes:
-            logger.info(f"Found potential Audacity pipes: {audacity_pipes}")
+            logger.info(f"Found {len(audacity_pipes)} Audacity pipe(s)")
             pipes_available = True
         else:
             logger.warning("No Audacity pipes found in system")
     except Exception as e:
         logger.error(f"Error checking pipe availability: {e}")
-    
+
     # Try to open the pipe if pipes are available
     if pipes_available:
         try:
             logger.info("Opening named pipe...")
             named_pipe.open()
             logger.info("Named pipe opened successfully")
-            
+
             # Initialize Audacity pipe
             audacity_api.set_pipe(named_pipe)
         except Exception as e:
             logger.error(f"Error opening named pipe: {e}")
-            # Continue with fallback approach
             pipes_available = False
-    
+
     # If pipes are not available, show a warning
     if not pipes_available:
-        logger.warning("Audacity pipes not available. Please ensure mod-script-pipe is enabled in Audacity preferences.")
-        import tkinter as tk
-        from tkinter import messagebox
-        
-        root = tk.Tk()
-        root.withdraw()
-        result = messagebox.askquestion(
-            "Pipe Connection Failed",
-            "Could not connect to Audacity via pipes. This may be due to:\n\n"
-            "1. mod-script-pipe not being enabled in Audacity\n"
-            "2. A compatibility issue with your version of Audacity\n\n"
-            "Would you like to continue with manual processing?\n"
-            "(This will require you to manually apply effects in Audacity)"
-        )
-        root.destroy()
-        
-        if result != 'yes':
-            logger.info("User chose to exit application")
-            return
+        logger.warning("Audacity pipes not available. Continuing with manual processing.")
 
     # Prompt for audio input file selection
     try:
@@ -188,33 +206,68 @@ def main():
     except Exception as e:
         logger.error(f"Error during command execution loop: {e}")
     finally:
+        # Only remove tracks, keep pipes open for next file
         try:
             if pipes_available:
                 response = audacity_api.run_command("RemoveTracks")
-                time.sleep(1)
-                audacity_api.close_audacity()
-                named_pipe.close()
-            else:
-                # Just show a message to close Audacity
-                import tkinter as tk
-                from tkinter import messagebox
-                
-                root = tk.Tk()
-                root.withdraw()
-                messagebox.showinfo(
-                    "Processing Complete",
-                    "Processing is complete. You can now close Audacity."
-                )
-                root.destroy()
-        except OSError as close_error:
-            logger.error(f"Error closing named pipe: {close_error}")
-        except Exception as unexpected_error:
-            logger.error(f"Unexpected error closing named pipe: {unexpected_error}")
-            
+            logger.info("Processing complete! Ready for next file.")
+        except Exception as e:
+            logger.error(f"Error removing tracks: {e}")
+
+
+_cleanup_done = False
+
+def cleanup():
+    """Cleanup function called when exiting the program."""
+    global _named_pipe, _audacity_api, _logger, _cleanup_done
+
+    # Prevent double cleanup
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+
+    if _logger:
+        _logger.info("Closing application...")
+
+    # First stop the pipe read thread (before closing Audacity)
+    try:
+        if _named_pipe:
+            _named_pipe.close()
+            if _logger:
+                _logger.info("Pipes closed")
+    except Exception as e:
+        if _logger:
+            _logger.error(f"Error closing pipes: {e}")
+
+    # Then close Audacity
+    try:
+        if _audacity_api:
+            _audacity_api.close_audacity()
+            if _logger:
+                _logger.info("Audacity closed")
+    except Exception as e:
+        if _logger:
+            _logger.error(f"Error closing Audacity: {e}")
+
+
+def main():
+    """Main entry point - launches the GUI."""
+    global _main_window, _logger
+
+    # Create the main window with cleanup callback
+    _main_window = MainWindow(process_audio_file, on_exit_callback=cleanup)
+
+    # Initialize services
+    init_services()
+
+    # Run the GUI
+    _main_window.run()
+
+
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        logger = LoggerService()
-        logger.error(f"Unexpected error: {e}")
-        print(e)
+        print(f"Unexpected error: {e}")
+    finally:
+        cleanup()

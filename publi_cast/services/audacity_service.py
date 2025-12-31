@@ -75,19 +75,26 @@ class AudacityAPI:
         return True
 
     def set_pipe(self, pipe):
+        # Skip if pipe is already set and thread is running
+        if self.pipe is not None and self.read_thread is not None and self.read_thread.is_alive():
+            self.logger.info("Pipe already configured, reusing existing connection")
+            return
+
         self.pipe = pipe
         self.logger.info("Pipe set for AudacityAPI")
-        
-        # Start non-blocking read thread
-        self.read_thread = threading.Thread(target=self._read_pipe_thread, daemon=True)
-        self.read_thread.start()
+
+        # Start non-blocking read thread only if not already running
+        if self.read_thread is None or not self.read_thread.is_alive():
+            self.read_thread = threading.Thread(target=self._read_pipe_thread, daemon=True)
+            self.read_thread.start()
 
     def _read_pipe_thread(self):
         """Thread to continuously read the pipe and store responses in the queue."""
         while True:
             if self.pipe:
-                response = self.pipe.read()
-                if response:
+                # Use silent=True to avoid timeout warnings during idle polling
+                response = self.pipe.read(timeout=1, silent=True)
+                if response and response != "Timeout":
                     self.response_queue.put(response)
             time.sleep(0.1)  # Pause to reduce CPU usage
 
