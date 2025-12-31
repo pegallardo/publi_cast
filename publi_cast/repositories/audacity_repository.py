@@ -43,19 +43,14 @@ class NamedPipe(Pipe):
         self.logger.info(f"Initialized NamedPipe with to={self.pipe_to_audacity}, from={self.pipe_from_audacity}")
 
     def open(self):
-        # First, let's log all available pipes to diagnose the issue
+        # Wait for pipes to be created (increased timeout for slower systems)
+        time.sleep(10)
+
         self.logger.info("Listing all available pipes in the system...")
         all_pipes = self.list_available_pipes()
         self.logger.info(f"Found {len(all_pipes)} pipes: {all_pipes}")
         
-        # Try to force Audacity to create pipes by sending a command to enable mod-script-pipe
-        self.logger.info("Attempting to force Audacity to create pipes...")
-        self._force_audacity_pipes()
-        
-        # Wait a moment for pipes to be created
-        time.sleep(3)
-        
-        # Check again for pipes
+        # Check for pipes
         all_pipes = self.list_available_pipes()
         self.logger.info(f"After forcing: Found {len(all_pipes)} pipes: {all_pipes}")
         
@@ -180,7 +175,7 @@ class NamedPipe(Pipe):
                     self.logger.error(f"Error reading from pipe: {e}")
             time.sleep(0.1)  # Slight delay to prevent excessive CPU usage
 
-    def wait_for_pipe(self, pipe_path, max_attempts=10, delay=1):
+    def wait_for_pipe(self, pipe_path, max_attempts=30, delay=2):
         for attempt in range(max_attempts):
             if os.path.exists(pipe_path):
                 self.logger.info(f"Pipe {pipe_path} found on attempt {attempt + 1}")
@@ -263,7 +258,7 @@ class NamedPipe(Pipe):
                 # Start Audacity again
                 import subprocess
                 subprocess.Popen([config.AUDACITY_PATH])
-                time.sleep(5)  # Wait for Audacity to start
+                time.sleep(15)  # Wait for Audacity to start and create pipes
                 
                 self.logger.info("Audacity restarted, pipes should be created now")
             else:
