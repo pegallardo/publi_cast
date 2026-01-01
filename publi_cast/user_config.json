@@ -1,0 +1,20 @@
+{
+  "compressor_type": "python",
+  "compressor": {
+    "threshold": -18,
+    "ratio": 5,
+    "attack": 30,
+    "release": 100,
+    "makeup": 0
+  },
+  "dynamic_compressor": {
+    "compress_ratio": 0.8,
+    "hardness": 0.879,
+    "floor": -18.0,
+    "noise_factor": 0.0,
+    "scale_max": 0.99
+  },
+  "normalize": {
+    "peak_level": -1.0
+  }
+}

@@ -42,13 +42,26 @@ AUDACITY_PATH = "C:\\Program Files\\Audacity\\audacity.exe"
 DEFAULT_RETRY_ATTEMPTS = 5
 DEFAULT_RETRY_DELAY = 2  # seconds
 
-# Audacity command configuration
+# Compressor type: "audacity" (standard Audacity) or "python" (dynamic compressor)
+COMPRESSOR_TYPE = "python"  # Default to Python dynamic compressor
+
+# Audacity standard compressor settings
 COMPRESSOR_SETTINGS = {
     'Threshold': -18,
     'Ratio': 5,
     'Attack': 30,
     'Release': 100,
     'Makeup': 0
+}
+
+# Python Dynamic Compressor settings (based on compress.ny by Chris Capel)
+# Default values from Audacity's Compress dynamics 1.2.6 preset
+DYNAMIC_COMPRESSOR_SETTINGS = {
+    'compress_ratio': 0.8,      # Compression amount (-.5 to 1.25)
+    'hardness': 0.879,          # Compression hardness (0.1 to 1.0)
+    'floor': -18.0,             # Floor in dB (-96 to 0)
+    'noise_factor': 0.0,        # Noise gate falloff (-2 to 10)
+    'scale_max': 0.99           # Maximum amplitude (0.0 to 1.0)
 }
 
 # EQ curve points - Podcast preset from Audacity

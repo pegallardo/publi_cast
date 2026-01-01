@@ -15,12 +15,20 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_con
 
 # Default settings
 DEFAULT_SETTINGS = {
+    "compressor_type": "python",  # "python" or "audacity"
     "compressor": {
         "threshold": -18,
         "ratio": 5,
         "attack": 30,
         "release": 100,
         "makeup": 0
+    },
+    "dynamic_compressor": {
+        "compress_ratio": 0.8,
+        "hardness": 0.879,
+        "floor": -18.0,
+        "noise_factor": 0.0,
+        "scale_max": 0.99
     },
     "normalize": {
         "peak_level": -1.0
@@ -36,6 +44,13 @@ SETTINGS_DEFS = {
         "release": {"label_key": "release", "tooltip_key": "tooltip_release", "min": 1, "max": 3000, "step": 10},
         "makeup": {"label_key": "makeup", "tooltip_key": "tooltip_makeup", "min": -30, "max": 30, "step": 1}
     },
+    "dynamic_compressor": {
+        "compress_ratio": {"label_key": "compress_ratio", "tooltip_key": "tooltip_compress_ratio", "min": -0.5, "max": 1.25, "step": 0.05},
+        "hardness": {"label_key": "hardness", "tooltip_key": "tooltip_hardness", "min": 0.1, "max": 1.0, "step": 0.01},
+        "floor": {"label_key": "floor", "tooltip_key": "tooltip_floor", "min": -96, "max": 0, "step": 1},
+        "noise_factor": {"label_key": "noise_factor", "tooltip_key": "tooltip_noise_factor", "min": -2, "max": 10, "step": 0.1},
+        "scale_max": {"label_key": "scale_max", "tooltip_key": "tooltip_scale_max", "min": 0.0, "max": 1.0, "step": 0.01}
+    },
     "normalize": {
         "peak_level": {"label_key": "peak_level", "tooltip_key": "tooltip_peak_level", "min": -10, "max": 0, "step": 0.1}
     }
@@ -47,7 +62,16 @@ def load_settings():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                loaded = json.load(f)
+                # Merge with defaults to ensure all keys exist
+                result = DEFAULT_SETTINGS.copy()
+                for key in result:
+                    if key in loaded:
+                        if isinstance(result[key], dict):
+                            result[key].update(loaded[key])
+                        else:
+                            result[key] = loaded[key]
+                return result
         except Exception:
             pass
     return DEFAULT_SETTINGS.copy()
@@ -62,12 +86,25 @@ def save_settings(settings):
 def apply_settings_to_config(settings):
     """Apply settings to the config module."""
     from publi_cast import config
-    
+
+    # Compressor type
+    config.COMPRESSOR_TYPE = settings.get('compressor_type', 'python')
+
+    # Audacity compressor settings
     config.COMPRESSOR_SETTINGS['Threshold'] = settings['compressor']['threshold']
     config.COMPRESSOR_SETTINGS['Ratio'] = settings['compressor']['ratio']
     config.COMPRESSOR_SETTINGS['Attack'] = settings['compressor']['attack']
     config.COMPRESSOR_SETTINGS['Release'] = settings['compressor']['release']
     config.COMPRESSOR_SETTINGS['Makeup'] = settings['compressor']['makeup']
+
+    # Dynamic compressor settings
+    config.DYNAMIC_COMPRESSOR_SETTINGS['compress_ratio'] = settings['dynamic_compressor']['compress_ratio']
+    config.DYNAMIC_COMPRESSOR_SETTINGS['hardness'] = settings['dynamic_compressor']['hardness']
+    config.DYNAMIC_COMPRESSOR_SETTINGS['floor'] = settings['dynamic_compressor']['floor']
+    config.DYNAMIC_COMPRESSOR_SETTINGS['noise_factor'] = settings['dynamic_compressor']['noise_factor']
+    config.DYNAMIC_COMPRESSOR_SETTINGS['scale_max'] = settings['dynamic_compressor']['scale_max']
+
+    # Normalize settings
     config.NORMALIZE_SETTINGS['peak_level'] = settings['normalize']['peak_level']
 
 
@@ -82,6 +119,7 @@ class SettingsPanel(ttk.LabelFrame):
         self.widgets = {}
         self.tooltips = {}
         self.labels = {}
+        self.section_frames = {}
 
         self._create_widgets()
         apply_settings_to_config(self.settings)
@@ -90,14 +128,49 @@ class SettingsPanel(ttk.LabelFrame):
         """Create all setting widgets."""
         row = 0
 
-        # Compressor section
-        self.comp_label = ttk.Label(self, text=t("compressor"), font=("Segoe UI", 10, "bold"))
-        self.comp_label.grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 5))
+        # Compressor type selector
+        type_frame = ttk.Frame(self)
+        type_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+
+        self.type_label = ttk.Label(type_frame, text=t("compressor_type") + ":", font=("Segoe UI", 10, "bold"))
+        self.type_label.pack(side="left")
+
+        self.compressor_type_var = tk.StringVar(value=self.settings.get("compressor_type", "python"))
+
+        self.radio_python = ttk.Radiobutton(
+            type_frame, text=t("compressor_python"), value="python",
+            variable=self.compressor_type_var, command=self._on_compressor_type_change
+        )
+        self.radio_python.pack(side="left", padx=(10, 5))
+
+        self.radio_audacity = ttk.Radiobutton(
+            type_frame, text=t("compressor_audacity"), value="audacity",
+            variable=self.compressor_type_var, command=self._on_compressor_type_change
+        )
+        self.radio_audacity.pack(side="left", padx=5)
         row += 1
 
+        # Dynamic Compressor section (Python)
+        self.dyn_frame = ttk.LabelFrame(self, text=t("dynamic_compressor"), padding="5")
+        self.dyn_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(0, 5))
+        self.section_frames["dynamic_compressor"] = self.dyn_frame
+
+        dyn_row = 0
+        for key, def_info in SETTINGS_DEFS["dynamic_compressor"].items():
+            self._create_slider_row_in_frame(self.dyn_frame, dyn_row, "dynamic_compressor", key, def_info)
+            dyn_row += 1
+        row += 1
+
+        # Audacity Compressor section
+        self.aud_frame = ttk.LabelFrame(self, text=t("compressor"), padding="5")
+        self.aud_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(0, 5))
+        self.section_frames["compressor"] = self.aud_frame
+
+        aud_row = 0
         for key, def_info in SETTINGS_DEFS["compressor"].items():
-            self._create_slider_row(row, "compressor", key, def_info)
-            row += 1
+            self._create_slider_row_in_frame(self.aud_frame, aud_row, "compressor", key, def_info)
+            aud_row += 1
+        row += 1
 
         # Separator
         ttk.Separator(self, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="ew", pady=10)
@@ -109,17 +182,39 @@ class SettingsPanel(ttk.LabelFrame):
         row += 1
 
         for key, def_info in SETTINGS_DEFS["normalize"].items():
-            self._create_slider_row(row, "normalize", key, def_info)
+            self._create_slider_row_in_frame(self, row, "normalize", key, def_info)
             row += 1
 
-    def _create_slider_row(self, row, section, key, def_info):
-        """Create a row with label, slider, spinbox and tooltip."""
+        # Update visibility based on compressor type
+        self._update_compressor_visibility()
+
+    def _on_compressor_type_change(self):
+        """Handle compressor type change."""
+        self.settings["compressor_type"] = self.compressor_type_var.get()
+        save_settings(self.settings)
+        apply_settings_to_config(self.settings)
+        self._update_compressor_visibility()
+        if self.on_change_callback:
+            self.on_change_callback("compressor_type", "type", self.compressor_type_var.get())
+
+    def _update_compressor_visibility(self):
+        """Show/hide compressor sections based on selected type."""
+        comp_type = self.compressor_type_var.get()
+        if comp_type == "python":
+            self.dyn_frame.grid()
+            self.aud_frame.grid_remove()
+        else:
+            self.dyn_frame.grid_remove()
+            self.aud_frame.grid()
+
+    def _create_slider_row_in_frame(self, frame, row, section, key, def_info):
+        """Create a row with label, slider, spinbox and tooltip in a specific frame."""
         value = self.settings[section][key]
         var = tk.DoubleVar(value=value)
 
         # Label with info icon
         label_text = t(def_info["label_key"])
-        label = ttk.Label(self, text=f"ℹ️ {label_text}", width=18)
+        label = ttk.Label(frame, text=f"ℹ️ {label_text}", width=18)
         label.grid(row=row, column=0, sticky="w", padx=(0, 5))
 
         # Add tooltip to label
@@ -129,7 +224,7 @@ class SettingsPanel(ttk.LabelFrame):
 
         # Slider
         slider = ttk.Scale(
-            self, from_=def_info["min"], to=def_info["max"],
+            frame, from_=def_info["min"], to=def_info["max"],
             variable=var, orient="horizontal", length=150,
             command=lambda v, s=section, k=key, vr=var: self._on_slider_change(s, k, vr)
         )
@@ -137,7 +232,7 @@ class SettingsPanel(ttk.LabelFrame):
 
         # Spinbox
         spinbox = ttk.Spinbox(
-            self, from_=def_info["min"], to=def_info["max"],
+            frame, from_=def_info["min"], to=def_info["max"],
             increment=def_info["step"], textvariable=var, width=8,
             command=lambda s=section, k=key, vr=var: self._on_value_change(s, k, vr)
         )
@@ -166,7 +261,11 @@ class SettingsPanel(ttk.LabelFrame):
     def update_language(self):
         """Update all labels and tooltips for current language."""
         self.config(text=t("settings_title"))
-        self.comp_label.config(text=t("compressor"))
+        self.type_label.config(text=t("compressor_type") + ":")
+        self.radio_python.config(text=t("compressor_python"))
+        self.radio_audacity.config(text=t("compressor_audacity"))
+        self.dyn_frame.config(text=t("dynamic_compressor"))
+        self.aud_frame.config(text=t("compressor"))
         self.norm_label.config(text=t("normalize"))
 
         for key, info in self.labels.items():
