@@ -1,5 +1,5 @@
 {
-  "compressor_type": "python",
+  "compressor_type": "audacity",
   "compressor": {
     "threshold": -18,
     "ratio": 5,

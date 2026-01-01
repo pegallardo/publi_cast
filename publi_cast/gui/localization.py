@@ -5,7 +5,13 @@ PubliCast - Localization system for French and English
 import json
 import os
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_config.json")
+# Store config in user-writable directory (e.g., %APPDATA%/PubliCast/user_config.json on Windows)
+if os.name == 'nt':
+    _appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    _config_dir = os.path.join(_appdata, 'PubliCast')
+else:
+    _config_dir = os.path.join(os.path.expanduser('~'), '.config', 'publi_cast')
+CONFIG_FILE = os.path.join(_config_dir, 'user_config.json')
 
 # All translations
 TRANSLATIONS = {
@@ -165,6 +171,7 @@ def set_language(lang):
             except Exception:
                 pass
         config["language"] = lang
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2)
 

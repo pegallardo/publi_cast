@@ -10,8 +10,13 @@ import os
 from publi_cast.gui.localization import t
 from publi_cast.gui.tooltip import Tooltip
 
-# Config file path
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "user_config.json")
+# Config file path (user-writable)
+if os.name == 'nt':
+    _appdata = os.getenv('APPDATA') or os.path.expanduser('~')
+    _config_dir = os.path.join(_appdata, 'PubliCast')
+else:
+    _config_dir = os.path.join(os.path.expanduser('~'), '.config', 'publi_cast')
+CONFIG_FILE = os.path.join(_config_dir, 'user_config.json')
 
 # Default settings
 DEFAULT_SETTINGS = {
@@ -79,6 +84,7 @@ def load_settings():
 
 def save_settings(settings):
     """Save settings to config file."""
+    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=2)
 
