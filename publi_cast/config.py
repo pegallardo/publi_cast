@@ -51,29 +51,32 @@ COMPRESSOR_SETTINGS = {
     'Makeup': 0
 }
 
-# EQ curve points - can be modified independently
+# EQ curve points - Podcast preset from Audacity
+# Format: "frequency gain_in_dB"
 EQ_CURVE_POINTS = [
-    "20 14", 
-    "51 14", 
-    "63 12", 
-    "76 11", 
-    "80 10", 
-    "90 9", 
-    "120 7", 
-    "200 4", 
-    "260 3", 
-    "300 2", 
-    "400 1", 
-    "500 0", 
-    "10000 0", 
-    "13000 -5"
+    "20 15",
+    "30 15",
+    "40 15",
+    "60 15",
+    "100 15",
+    "140 12",
+    "200 6",
+    "300 3",
+    "500 1",
+    "700 0",
+    "1000 0",
+    "2000 0",
+    "3000 0",
+    "5000 -3",
+    "10000 -6",
+    "20000 -6"
 ]
 
 # Normalize settings
 NORMALIZE_SETTINGS = {
     'remove_dc_offset': True,
     'peak_level': -1.0,
-    'normalize_stereo': True
+    'normalize_stereo': False  # Normalize stereo channels together, not independently
 }
 
 AUDACITY_COMMANDS = {
