@@ -1,0 +1,33 @@
+9c3d8cb|feat: store user_config.json in user-writable directory|2026-01-01 21:03:55 +0200
+92d9082|ci: disable automatic CI triggers on push/PR|2026-01-01 19:06:05 +0200
+fcfadc6|feat(audio): add Python dynamic compressor as alternative to Audacity|2026-01-01 19:04:01 +0200
+6188df1|chore(resources): add Nyquist dynamic compressor plugins|2026-01-01 18:32:34 +0200
+72e0f5d|fix(config): update EQ and normalization defaults to match Audacity Podcast preset|2026-01-01 18:30:08 +0200
+f35bd1d|feat(gui): add bilingual support (FR/EN) with parameter tooltips|2026-01-01 18:17:36 +0200
+3496942|feat: improve pipe management and application lifecycle|2025-12-31 18:52:44 +0200
+b8448b7|minor fixes // waiting for pipes creation|2025-12-31 18:20:01 +0200
+9f9079e|fix: correct imports and add missing dependencies|2025-12-31 16:55:32 +0200
+30da9e9|Windows 11 specific Audacity pipes fixes|2025-05-01 14:26:28 +0300
+0d46c3d|README Update|2025-04-30 11:32:42 +0300
+d6855a6|import filename fix|2025-03-27 15:54:23 +0200
+2b176b3|minor fix for 0.1|2025-03-26 12:11:11 +0200
+eec02c1|version 0.1|2025-03-26 11:15:52 +0200
+7d8e854|Add a sound compression service|2025-02-06 09:54:43 +0200
+cd7eb43|Add Controller logic|2024-11-01 18:38:44 +0200
+3ff6a3e|git ignore update|2024-11-01 18:22:26 +0200
+652fc9a|Non blocking reading logic for pipe using Threads|2024-11-01 18:18:31 +0200
+be0c441|Unit testing|2024-11-01 10:54:48 +0200
+e676c50|Logger and DI improvements|2024-11-01 10:30:02 +0200
+a5665a2|Logger service implementation|2024-10-28 13:04:51 +0200
+20af0a9|Audacity command improvements|2024-10-27 12:38:04 +0200
+b5f1eff|fix|2024-10-27 11:15:21 +0200
+ef089bf|Audacity Pipes initialization fix|2024-10-27 11:13:21 +0200
+63570e5|.gitignore update|2024-06-28 14:06:46 +0300
+73163b7|Cleaning|2024-06-28 11:35:18 +0300
+722a3ba|Configuration|2024-06-28 11:33:13 +0300
+2814855|Project Structure Refactoring|2024-06-27 18:34:14 +0300
+1868199|Refactoring|2024-06-26 17:44:15 +0300
+1f0e0f3|Naming and Code Refactoring|2024-06-26 17:43:14 +0300
+dcb1d61|add services and tests|2024-06-26 17:26:23 +0300
+ab55f5b|first version|2024-06-26 17:23:15 +0300
+6c4cfe8|Initial commit|2024-06-26 17:12:15 +0300

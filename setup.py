@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='publi_cast',
-    version='0.1.0',
+    version='0.2.1',
     description='Audio processing application that automates audio enhancement using Audacity',
     author='pegallardo',
     url='https://github.com/pegallardo/publi_cast',
