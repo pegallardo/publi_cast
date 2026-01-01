@@ -10,6 +10,7 @@ import queue
 
 from publi_cast.gui.settings_panel import SettingsPanel
 from publi_cast.gui.localization import t, get_language, set_language
+from publi_cast.version import get_full_version
 
 
 class TextHandler(logging.Handler):
@@ -32,7 +33,7 @@ class MainWindow:
         self.process_callback = process_callback
         self.on_exit_callback = on_exit_callback
         self.root = tk.Tk()
-        self.root.title("PubliCast - Audio Processor")
+        self.root.title(get_full_version())
         self.root.geometry("1000x650")
         self.root.minsize(900, 500)
 
@@ -262,7 +263,7 @@ class MainWindow:
 
     def _update_ui_language(self):
         """Update all UI elements with current language."""
-        self.root.title(t("app_title"))
+        self.root.title(get_full_version())
         self.title_label.config(text=t("app_title"))
         self.lang_label.config(text=t("language") + ":")
         self.log_frame.config(text=t("logs"))
