@@ -169,9 +169,13 @@ cython_debug/
 #.idea/
 
 
+# Audio files
 *.wav
 *.mp3
 *.mp4
 *.flac
 *.flv
 *.ogg
+
+# External plugins/tools
+dynamic-compressor-for-audacity-1.2.6/

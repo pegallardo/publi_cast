@@ -166,9 +166,9 @@ def process_audio_file():
                 logger.error(f"Error opening audio file in Audacity: {e}")
                 return
 
-        # Prompt for audio output file selection
+        # Prompt for audio output file selection (use input filename as default)
         try:
-            output_path, format = export_controller.handle_export()
+            output_path, format = export_controller.handle_export(audio_file)
         except Exception as export_error:
             logger.error(f"Error handling export: {export_error}")
             output_path = None

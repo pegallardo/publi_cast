@@ -8,6 +8,9 @@ import threading
 import logging
 import queue
 
+from publi_cast.gui.settings_panel import SettingsPanel
+from publi_cast.gui.localization import t, get_language, set_language
+
 
 class TextHandler(logging.Handler):
     """Custom logging handler that writes to a tkinter Text widget."""
@@ -30,14 +33,15 @@ class MainWindow:
         self.on_exit_callback = on_exit_callback
         self.root = tk.Tk()
         self.root.title("PubliCast - Audio Processor")
-        self.root.geometry("800x600")
-        self.root.minsize(600, 400)
+        self.root.geometry("1000x650")
+        self.root.minsize(900, 500)
 
         # Handle window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_exit)
 
-        # Configure grid
-        self.root.columnconfigure(0, weight=1)
+        # Configure grid - 2 columns: settings panel + main content
+        self.root.columnconfigure(0, weight=0)  # Settings panel (fixed width)
+        self.root.columnconfigure(1, weight=1)  # Main content (expandable)
         self.root.rowconfigure(0, weight=1)
 
         # Queue for thread-safe logging
@@ -52,28 +56,52 @@ class MainWindow:
 
     def _create_widgets(self):
         """Create all GUI widgets."""
-        # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky="nsew")
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(1, weight=1)
+        # Settings panel (left side)
+        self.settings_panel = SettingsPanel(self.root, on_change_callback=self._on_setting_change)
+        self.settings_panel.grid(row=0, column=0, sticky="ns", padx=(10, 5), pady=10)
+
+        # Main frame (right side)
+        self.main_frame = ttk.Frame(self.root, padding="10")
+        self.main_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(2, weight=1)
+
+        # Header frame (title + language selector)
+        header_frame = ttk.Frame(self.main_frame)
+        header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header_frame.columnconfigure(0, weight=1)
 
         # Title
-        title_label = ttk.Label(
-            main_frame,
-            text="PubliCast - Audio Processor",
+        self.title_label = ttk.Label(
+            header_frame,
+            text=t("app_title"),
             font=("Segoe UI", 16, "bold")
         )
-        title_label.grid(row=0, column=0, pady=(0, 10))
+        self.title_label.grid(row=0, column=0, sticky="w")
+
+        # Language selector
+        lang_frame = ttk.Frame(header_frame)
+        lang_frame.grid(row=0, column=1, sticky="e")
+
+        self.lang_label = ttk.Label(lang_frame, text=t("language") + ":")
+        self.lang_label.grid(row=0, column=0, padx=(0, 5))
+
+        self.lang_var = tk.StringVar(value=get_language())
+        lang_combo = ttk.Combobox(
+            lang_frame, textvariable=self.lang_var,
+            values=["fr", "en"], width=5, state="readonly"
+        )
+        lang_combo.grid(row=0, column=1)
+        lang_combo.bind("<<ComboboxSelected>>", self._on_language_change)
 
         # Log area
-        log_frame = ttk.LabelFrame(main_frame, text="Logs", padding="5")
-        log_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
+        self.log_frame = ttk.LabelFrame(self.main_frame, text=t("logs"), padding="5")
+        self.log_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.log_frame.columnconfigure(0, weight=1)
+        self.log_frame.rowconfigure(0, weight=1)
 
         self.log_text = scrolledtext.ScrolledText(
-            log_frame,
+            self.log_frame,
             wrap=tk.WORD,
             font=("Consolas", 10),
             bg="#1e1e1e",
@@ -90,13 +118,13 @@ class MainWindow:
         self.log_text.tag_config("DEBUG", foreground="#888888")
 
         # Status bar
-        self.status_var = tk.StringVar(value="Prêt")
-        status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.status_var = tk.StringVar(value=t("ready"))
+        status_bar = ttk.Label(self.main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
+        status_bar.grid(row=3, column=0, sticky="ew", pady=(0, 10))
 
         # Button frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, sticky="ew")
+        button_frame = ttk.Frame(self.main_frame)
+        button_frame.grid(row=4, column=0, sticky="ew")
         button_frame.columnconfigure(0, weight=1)
         button_frame.columnconfigure(1, weight=1)
         button_frame.columnconfigure(2, weight=1)
@@ -104,26 +132,26 @@ class MainWindow:
         # Process button
         self.process_btn = ttk.Button(
             button_frame,
-            text="🎵 Traiter un fichier audio",
+            text=t("btn_process"),
             command=self._on_process_click
         )
         self.process_btn.grid(row=0, column=0, padx=5, sticky="ew")
 
         # Clear log button
-        clear_btn = ttk.Button(
+        self.clear_btn = ttk.Button(
             button_frame,
-            text="🗑️ Effacer les logs",
+            text=t("btn_clear_logs"),
             command=self._clear_logs
         )
-        clear_btn.grid(row=0, column=1, padx=5, sticky="ew")
+        self.clear_btn.grid(row=0, column=1, padx=5, sticky="ew")
 
         # Exit button
-        exit_btn = ttk.Button(
+        self.exit_btn = ttk.Button(
             button_frame,
-            text="❌ Quitter",
+            text=t("btn_quit"),
             command=self._on_exit
         )
-        exit_btn.grid(row=0, column=2, padx=5, sticky="ew")
+        self.exit_btn.grid(row=0, column=2, padx=5, sticky="ew")
 
     def _setup_logging(self):
         """Setup logging to redirect to the text widget."""
@@ -202,18 +230,18 @@ class MainWindow:
         """Handle exit button click or window close."""
         if self.is_processing:
             if not tk.messagebox.askyesno(
-                "Traitement en cours",
-                "Un traitement est en cours. Voulez-vous vraiment quitter?"
+                t("processing_in_progress"),
+                t("confirm_quit")
             ):
                 return
 
         # Call cleanup callback before closing
         if self.on_exit_callback:
             try:
-                self.log("Fermeture en cours...", "INFO")
+                self.log(t("closing"), "INFO")
                 self.on_exit_callback()
             except Exception as e:
-                self.log(f"Erreur lors de la fermeture: {e}", "ERROR")
+                self.log(f"{t('close_error')}: {e}", "ERROR")
 
         self.root.quit()
         self.root.destroy()
@@ -222,7 +250,34 @@ class MainWindow:
         """Add a log message directly."""
         self.log_queue.put(f"{level} - {message}")
 
+    def _on_setting_change(self, section, key, value):
+        """Handle setting change from settings panel."""
+        self.log(f"{t('setting_changed')}: {section}.{key} = {value}", "INFO")
+
+    def _on_language_change(self, event=None):
+        """Handle language change."""
+        new_lang = self.lang_var.get()
+        set_language(new_lang)
+        self._update_ui_language()
+
+    def _update_ui_language(self):
+        """Update all UI elements with current language."""
+        self.root.title(t("app_title"))
+        self.title_label.config(text=t("app_title"))
+        self.lang_label.config(text=t("language") + ":")
+        self.log_frame.config(text=t("logs"))
+        self.process_btn.config(text=t("btn_process"))
+        self.clear_btn.config(text=t("btn_clear_logs"))
+        self.exit_btn.config(text=t("btn_quit"))
+
+        # Update status if not processing
+        if not self.is_processing:
+            self.status_var.set(t("ready"))
+
+        # Update settings panel
+        self.settings_panel.update_language()
+
     def run(self):
         """Start the main event loop."""
-        self.log("Application démarrée", "INFO")
+        self.log(t("app_started"), "INFO")
         self.root.mainloop()
