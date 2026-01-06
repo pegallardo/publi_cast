@@ -139,8 +139,8 @@ TRANSLATIONS = {
     }
 }
 
-# Current language (default: French)
-_current_lang = "fr"
+# Current language (default: English)
+_current_lang = "en"
 
 
 def get_language():
